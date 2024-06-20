@@ -1,0 +1,3 @@
+FROM python:3.10.2
+
+ENV PYTHONBUFFERED 1
