@@ -15,7 +15,7 @@ email varchar(50) UNIQUE,
 nickname varchar(50) UNIQUE,
 pasword_hash varchar(150),
 role_id int references roles(id),
-is_banne bool,
+is_banned boolean,
 created_at date
 );
 
