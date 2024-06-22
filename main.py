@@ -1,16 +1,18 @@
-import posts
-import users
+from routers import posts, auth, users, admin
 from fastapi import FastAPI
 from fastapi.security import OAuth2PasswordBearer
 
 
-OAuth2_SCHEME = OAuth2PasswordBearer('user/login/')
+OAuth2_SCHEME = OAuth2PasswordBearer('auth/login/')
 
 app = FastAPI()
 
 
 app.include_router(posts.router)
+app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(admin.router)
+
 
 @app.get('/')
 async def index():
