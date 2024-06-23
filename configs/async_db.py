@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 
-SQLALCHEMY_DATABASE_URL= "postgresql+asyncpg://postgres:*****@localhost/****"
+SQLALCHEMY_DATABASE_URL= "postgresql+asyncpg://postgres:1111@localhost/fastblog"
 
 engine = create_async_engine(SQLALCHEMY_DATABASE_URL)
 
