@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from configs.async_db import get_db
 from sqlalchemy.future import select
 from jose import jwt, JWTError
@@ -8,14 +9,18 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HT
 from datetime import datetime, timedelta
 from schemas import users, auth
 import models
-from typing import Optional
-from schemas.auth import Token
+from services.send_email import send_password_reset_email
+from schemas.auth import Token, PasswordResetRequest, PasswordResetResponse, PasswordResetToken
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
 ALGORITHM = 'HS256'
-SECRET_KEY = 'dcfvghjkljhvcxvbnm'
-REFRESH_SECRET_KEY = "xcgyuciosl8v6bn2mj5hbghjfkdxsl"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY = os.getenv('SECRET_KEY')
+REFRESH_SECRET_KEY = os.getenv('REFRESH_SECRET_KEY')
+ACCESS_TOKEN_EXPIRE_MINUTES = 5
 REFRESH_TOKEN_EXPIRE_DAYS = 5
 OAuth2_SCHEME = OAuth2PasswordBearer(tokenUrl='auth/login')
 
@@ -56,6 +61,9 @@ async def authenticate_user(db: AsyncSession, email: str, password: str):
     if not user or not verify_password(password, user.password_hash):
         return False
     return user
+
+def create_password_reset_token(data: dict):
+    return jwt.encode(data, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
 
 
 async def get_current_user(token: HTTPAuthorizationCredentials = Depends(OAuth2_SCHEME),
@@ -114,9 +122,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 
 @router.post("/token/refresh", response_model=Token)
-async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+async def refresh_token(reset_token: str, db: AsyncSession = Depends(get_db)):
     try:
-        payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(reset_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if not email:
             raise HTTPException(
@@ -196,3 +204,61 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     )
 
     return {'access_token': access_token, 'refresh_token': refresh_token, 'token_type': 'bearer'}
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password(
+    request: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    user = await db.execute(
+        select(models.User).where(models.User.email == request.email)
+    )
+    user = user.scalar()
+
+    if user:
+        reset_token = create_password_reset_token(data={"sub": user.email})
+        await send_password_reset_email(user.email, reset_token)
+        return PasswordResetResponse(message="Password reset instructions sent to your email.")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist."
+        )
+
+
+@router.put("/reset-password/confirm", response_model=PasswordResetResponse)
+async def confirm_password_reset(
+    request: PasswordResetToken,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(request.token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid reset token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = await db.execute(select(models.User).where(models.User.email == email))
+        user = user.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user.password = request.new_password
+        await db.add(user)
+        await db.commit()
+
+        return PasswordResetResponse(message="Password reset successfully.")
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid reset token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
