@@ -1,4 +1,4 @@
-from configs.sync_db import Base
+from db.sync_db import Base
 from sqlalchemy import (Column, Integer, String, Boolean,
                         TIMESTAMP, text, ForeignKey)
 from sqlalchemy.orm import relationship
@@ -28,7 +28,7 @@ class Post(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     title = Column(String, nullable=False)
-    topic_id = Column(Integer, ForeignKey('topics.id'))
+    topic_id = Column(Integer, ForeignKey('topics.id'), nullable=False)
     content = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
@@ -40,6 +40,7 @@ class Post(Base):
 
 class User(Base):
     __tablename__ = 'user'
+
     id = Column(Integer, primary_key=True, nullable=False)
     first_name = Column(String, nullable=False)
     second_name = Column(String, nullable=False)
@@ -59,8 +60,22 @@ class User(Base):
                                foreign_keys='Subscription.subscribed_id',
                                backref='subscribed')
 
+    tokens = relationship('Tokens', back_populates='user')
+
 
 class Subscription(Base):
     __tablename__ = 'subscription'
+
     subscriber_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
     subscribed_id = Column(Integer, ForeignKey('user.id'), primary_key=True)
+
+
+class Tokens(Base):
+    __tablename__ = 'tokens'
+
+    id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
+    reset_token = Column(String, nullable=False)
+    reset_token_expire = Column(TIMESTAMP, nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id'))
+
+    user = relationship('User', back_populates='tokens')

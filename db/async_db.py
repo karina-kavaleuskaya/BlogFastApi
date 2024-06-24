@@ -1,9 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
-
-
-SQLALCHEMY_DATABASE_URL= "postgresql+asyncpg://postgres:1111@localhost/fastblog"
+from config import SQLALCHEMY_DATABASE_URL
 
 engine = create_async_engine(SQLALCHEMY_DATABASE_URL)
 
@@ -16,4 +13,3 @@ async def get_db():
             yield session
         finally:
             await session.close()
-

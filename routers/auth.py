@@ -1,101 +1,31 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from configs.async_db import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from db.async_db import get_db
 from sqlalchemy.future import select
-from jose import jwt, JWTError
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPAuthorizationCredentials
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta
 from schemas import users, auth
 import models
-from services.send_email import send_password_reset_email
+from send_notif.send_email import send_password_reset_email
 from schemas.auth import Token, PasswordResetRequest, PasswordResetResponse, PasswordResetToken
 from dotenv import load_dotenv
+from services.auth import (get_user, create_access_token, create_refresh_token, authenticate_user,
+                           create_password_reset_token, )
+from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 
 load_dotenv()
 
 
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
-ALGORITHM = 'HS256'
-SECRET_KEY = os.getenv('SECRET_KEY')
-REFRESH_SECRET_KEY = os.getenv('REFRESH_SECRET_KEY')
-ACCESS_TOKEN_EXPIRE_MINUTES = 5
-REFRESH_TOKEN_EXPIRE_DAYS = 5
 OAuth2_SCHEME = OAuth2PasswordBearer(tokenUrl='auth/login')
 
 router = APIRouter(
     prefix='/auth',
     tags=['Auth']
 )
-
-
-async def get_user(db:AsyncSession, email):
-    async with db:
-        result = await db.execute(select(models.User).filter(models.User.email == email))
-        return result.scalars().first()
-
-
-def verify_password(plain_password, hashed_password):
-    return PWD_CONTEXT.verify(plain_password, hashed_password)
-
-
-def create_access_token(data: dict, expires_delta: timedelta):
-    data_to_process = data.copy()
-    expire = datetime.utcnow() + expires_delta
-    data_to_process.update({'exp': expire})
-    encode_jwt = jwt.encode(data_to_process, SECRET_KEY, algorithm=ALGORITHM)
-    return encode_jwt
-
-
-def create_refresh_token(data: dict, expires_delta: timedelta):
-    data_to_process = data.copy()
-    expire = datetime.utcnow() + expires_delta
-    data_to_process.update({'exp': expire})
-    refresh_token = jwt.encode(data_to_process, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
-    return refresh_token
-
-
-async def authenticate_user(db: AsyncSession, email: str, password: str):
-    user = await get_user(db, email)
-    if not user or not verify_password(password, user.password_hash):
-        return False
-    return user
-
-def create_password_reset_token(data: dict):
-    return jwt.encode(data, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
-
-
-async def get_current_user(token: HTTPAuthorizationCredentials = Depends(OAuth2_SCHEME),
-                           db: AsyncSession = Depends(get_db)):
-
-    credential_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail='Could not validate credentials',
-        headers={'WWW-Authenticate': 'Bearer'}
-    )
-
-    try:
-        payload = jwt.decode(token.access_token, SECRET_KEY, algorithms=ALGORITHM)
-        email: str = payload.get('sub')
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Could not validate credentials',
-                headers={'WWW-Authenticate': 'Bearer'}
-            )
-
-        user = await db.execute(select(models.User).filter(models.User.email == email))
-        user = user.scalars().first()
-        if not user:
-            raise credential_exception
-        refresh_payload = jwt.decode(token.refresh_token, REFRESH_SECRET_KEY, algorithms=ALGORITHM)
-        if refresh_payload.get('sub') != email:
-            raise credential_exception
-
-        return user
-    except (JWTError, AttributeError):
-        raise credential_exception
 
 
 @router.post("/token", response_model=Token)
@@ -219,6 +149,16 @@ async def reset_password(
     if user:
         reset_token = create_password_reset_token(data={"sub": user.email})
         await send_password_reset_email(user.email, reset_token)
+        expires_delta = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.utcnow() + expires_delta
+        reset_token_obj = models.Tokens(
+            reset_token=reset_token,
+            reset_token_expire=expire,
+            user_id=user.id
+        )
+        db.add(reset_token_obj)
+        await db.commit()
+
         return PasswordResetResponse(message="Password reset instructions sent to your email.")
     else:
         raise HTTPException(
@@ -226,39 +166,44 @@ async def reset_password(
             detail="User with this email does not exist."
         )
 
-
-@router.put("/reset-password/confirm", response_model=PasswordResetResponse)
+@router.post("/reset-password/confirm", response_model=PasswordResetResponse)
 async def confirm_password_reset(
     request: PasswordResetToken,
     db: AsyncSession = Depends(get_db)
 ):
-    try:
-        payload = jwt.decode(request.token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("email")
-        if not email:
+    token = await db.execute(
+        select(models.Tokens).where(models.Tokens.reset_token == request.token)
+    )
+    token = token.scalar()
+
+    if token:
+        if token.reset_token_expire > datetime.utcnow():
+            user = await db.get(models.User, token.user_id)
+
+            if user:
+                user.password_hash = PWD_CONTEXT.hash(request.new_password)
+                db.add(user)
+                await db.commit()
+
+                await db.delete(token)
+                await db.commit()
+
+                return PasswordResetResponse(message="Password reset successfully.")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        else:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid reset token",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset token has expired.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-
-        user = await db.execute(select(models.User).where(models.User.email == email))
-        user = user.scalar_one_or_none()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        user.password = request.new_password
-        await db.add(user)
-        await db.commit()
-
-        return PasswordResetResponse(message="Password reset successfully.")
-    except JWTError:
+    else:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid reset token",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reset token not found.",
             headers={"WWW-Authenticate": "Bearer"},
         )
