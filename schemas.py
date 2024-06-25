@@ -1,6 +1,16 @@
 from pydantic import BaseModel
 
 
+class PostBase(BaseModel):
+    title: str
+    content: str
+
+
+    class Config:
+        from_attributes = True
+
+
+
 class UserBase(BaseModel):
     email: str
 
@@ -10,10 +20,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password:str
-    first_name: str
-    second_name: str
-    nickname: str
 
 
 class User(UserBase):
     id: int
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+

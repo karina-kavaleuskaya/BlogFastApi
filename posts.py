@@ -1,12 +1,12 @@
 import models
-from schemas import posts
+import schemas
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import  HTTPException, Depends, APIRouter
-from db.async_db import get_db
+from async_db import get_db
 from sqlalchemy.future import select
+from users import get_current_user
 from fastapi import status
-from services.auth import get_current_user
 
 
 router = APIRouter(
@@ -15,7 +15,7 @@ router = APIRouter(
 )
 
 
-@router.get('/', response_model=List[posts.PostBase])
+@router.get('/', response_model=List[schemas.PostBase])
 async def all_post(db: AsyncSession = Depends(get_db)):
     async with db:
         result = await db.execute(select(models.Post))
@@ -23,20 +23,20 @@ async def all_post(db: AsyncSession = Depends(get_db)):
         return posts
 
 
-@router.post('/', response_model=posts.PostBase, status_code=status.HTTP_201_CREATED)
-async def create_post(post: posts.PostBase, db: AsyncSession = Depends(get_db),
+@router.post('/', response_model=schemas.PostBase, status_code=status.HTTP_201_CREATED)
+async def create_post(post: schemas.PostBase, db: AsyncSession = Depends(get_db),
                       user: models.User = Depends(get_current_user)):
-    new_post = models.Post(**post.dict(), user_id=user.id)
+    new_post = models.Post(**post.dict(), user_id =user.id)
     db.add(new_post)
     await db.commit()
     await db.refresh(new_post)
     return new_post
 
 
-@router.put('/{post_id}', response_model=posts.PostBase)
+@router.put('/{post_id}', response_model=schemas.PostBase)
 async def update_post(
         post_id: int,
-        update_post: posts.PostBase,
+        update_post: schemas.PostBase,
         db: AsyncSession = Depends(get_db),
         user: models.User = Depends(get_current_user)
 ):
@@ -73,7 +73,7 @@ async def delete_post(post_id:int, db: AsyncSession = Depends(get_db), user: mod
     await db.commit()
 
 
-@router.get('/{post_id}', response_model=posts.PostBase)
+@router.get('/{post_id}', response_model=schemas.PostBase)
 async def get_post_by_id(post_id: int, db: AsyncSession = Depends(get_db)):
     post = await db.execute(select(models.Post).filter(models.Post.id == post_id))
     post = post.scalars().first()
