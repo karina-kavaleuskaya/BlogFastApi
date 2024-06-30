@@ -167,6 +167,7 @@ async def reset_password(
             detail="User with this email does not exist."
         )
 
+
 @router.post("/reset-password/confirm", response_model=PasswordResetResponse)
 async def confirm_password_reset(
     request: PasswordResetToken,

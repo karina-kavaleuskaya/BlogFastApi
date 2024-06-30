@@ -14,20 +14,6 @@ class PostBase(BaseModel):
     class Config:
         from_attributes = True
 
-    @validator('topic_id')
-    def topic_id_must_be_valid(cls, v):
-        if v is not None and not isinstance(v, int):
-            raise ValueError('topic_id must be an integer or None')
-        return v
-
-    @validator('content')
-    def content_must_not_exceed_10000_chars(cls, v):
-        if len(v) > 10000:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Content must not exceed 10,000 characters'
-            )
-        return v
 
 class PostCreate(PostBase):
     pass
