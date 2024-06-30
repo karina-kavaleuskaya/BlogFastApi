@@ -1,5 +1,5 @@
 import os
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Response
 from db.async_db import get_db
 from sqlalchemy.future import select
 from jose import jwt, JWTError
@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
+import logger
 import models
 from dotenv import load_dotenv
-from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, REFRESH_TOKEN_EXPIRE_DAYS
+from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, REFRESH_TOKEN_EXPIRE_DAYS, ACCESS_TOKEN_EXPIRE_MINUTES
 
 load_dotenv()
 
@@ -55,8 +56,11 @@ def create_password_reset_token(data: dict):
     return jwt.encode(data, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def get_current_user(token: HTTPAuthorizationCredentials = Depends(OAuth2_SCHEME),
-                           db: AsyncSession = Depends(get_db)):
+async def get_current_user(
+    request: Request,
+    token: str = Depends(OAuth2_SCHEME),
+    db: AsyncSession = Depends(get_db)
+):
 
     credential_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -65,24 +69,79 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(OAuth2_
     )
 
     try:
-        payload = jwt.decode(token.access_token, SECRET_KEY, algorithms=ALGORITHM)
-        email: str = payload.get('sub')
+        access_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": True})
+        email: str = access_payload.get('sub')
         if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Could not validate credentials',
-                headers={'WWW-Authenticate': 'Bearer'}
-            )
+            raise credential_exception
 
-        user = await db.execute(select(models.User).filter(models.User.email == email))
+        user = await db.execute(select(models.User).where(models.User.email == email))
         user = user.scalars().first()
         if not user:
             raise credential_exception
-        refresh_payload = jwt.decode(token.refresh_token, REFRESH_SECRET_KEY, algorithms=ALGORITHM)
-        if refresh_payload.get('sub') != email:
-            raise credential_exception
 
         return user
-    except (JWTError, AttributeError):
+
+    except jwt.ExpiredSignatureError:
+        refresh_token = get_refresh_token(request)
+        if refresh_token:
+            try:
+                refresh_payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+                email = refresh_payload.get('sub')
+                if email:
+                    user = await db.execute(select(models.User).where(models.User.email == email))
+                    user = user.scalars().first()
+                    if user:
+                        access_token_data = {'sub': user.email}
+                        new_access_token = create_access_token(data=access_token_data,
+                                                               expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+                        return user
+                    else:
+
+                        raise credential_exception
+                else:
+                    raise credential_exception
+            except JWTError as e:
+                raise credential_exception
+        else:
+            raise credential_exception
+    except JWTError as e:
         raise credential_exception
 
+async def refresh_access_token(request: Request, db: AsyncSession):
+    refresh_token = get_refresh_token(request)
+    if not refresh_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found")
+
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+        user = await db.get(models.User, user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+        access_token = create_access_token(user)
+        new_refresh_token = create_refresh_token(user)
+        save_refresh_token(request.app.state.Response, new_refresh_token)
+        return access_token
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token has expired")
+    except Exception as e:
+        logger.error(f"Error refreshing access token: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Error refreshing access token")
+
+
+def save_refresh_token(response: Response, refresh_token: str):
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+    )
+
+def get_refresh_token(request: Request):
+    return request.cookies.get("refresh_token")
