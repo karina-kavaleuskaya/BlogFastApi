@@ -1,4 +1,3 @@
-import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from db.async_db import get_db
 from sqlalchemy.future import select
@@ -9,12 +8,12 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta
 from schemas import users, auth
 import models
-from send_notif.send_email import send_password_reset_email
+from services.send_email import send_password_reset_email
 from schemas.auth import Token, PasswordResetRequest, PasswordResetResponse, PasswordResetToken
 from dotenv import load_dotenv
 from services.auth import (get_user, create_access_token, create_refresh_token, authenticate_user,
                            create_password_reset_token, )
-from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
+from config import ALGORITHM, REFRESH_SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 
 load_dotenv()
 
@@ -105,6 +104,8 @@ async def register(user: users.UserCreate, db: AsyncSession = Depends(get_db)):
         second_name=user.second_name,
         nickname=user.nickname,
         password_hash=hashed_password,
+        sex_id=user.sex_id,
+        country_id=user.country_id,
         created_at=datetime.now(),
     )
     db.add(db_user)
