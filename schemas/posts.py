@@ -31,21 +31,21 @@ class PostResponse(BaseModel):
     file_path: str | None
     created_at: datetime
 
-    @validator('content')
-    def content_must_not_exceed_10000_chars(cls, v):
-        if len(v) > 10000:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Content must not exceed 10,000 characters'
-            )
-        return v
-
     @validator('title')
     def content_must_not_exceed_10000_chars(cls, v):
         if len(v) > 300:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Content must not exceed 300 characters'
+            )
+        return v
+
+    @validator('content')
+    def content_must_not_exceed_10000_chars(cls, v):
+        if len(v) > 10000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Content must not exceed 10,000 characters'
             )
         return v
 
