@@ -6,7 +6,7 @@ from datetime import datetime
 
 class PostBase(BaseModel):
     title: str
-    topic_id: int
+    topic_id: int | None
     content: str
     user_id: int
     created_at: datetime
@@ -32,7 +32,7 @@ class PostResponse(BaseModel):
     created_at: datetime
 
     @validator('title')
-    def content_must_not_exceed_10000_chars(cls, v):
+    def title_must_not_exceed_10000_chars(cls, v):
         if len(v) > 300:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,6 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional
-import datetime
+from fastapi import HTTPException, status
 
 
 class UserBase(BaseModel):
@@ -21,8 +20,12 @@ class UserCreate(UserBase):
 
     @validator('email')
     def email_must_be_valid(cls, v):
-        if not isinstance(v, str) or '@' not in v:
-            raise ValueError('email must be a valid email address')
+        import re
+        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', v):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid email address"
+            )
         return v
 
 

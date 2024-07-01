@@ -9,7 +9,9 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 from fastapi import HTTPException, status, Depends, APIRouter, Form, UploadFile, File
 from services.auth import get_current_user
-from services.upload_files import FILE_MANAGER
+from config import file_manager
+from sqlalchemy.orm.exc import NoResultFound
+
 
 
 router = APIRouter(
@@ -31,7 +33,15 @@ async def all_posts(
     POSTS_PER_PAGE = 10
 
     async with db:
-        topic_id_list = [int(topic_id.strip()) for topic_id in topic_ids.split(',')] if topic_ids else []
+        topic_id_list = []
+        if topic_ids:
+            try:
+                topic_id_list = [int(topic_id.strip()) for topic_id in topic_ids.split(',')]
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="topic_ids must contain only integer values"
+                )
 
         query = select(models.Post)
 
@@ -103,8 +113,8 @@ async def all_posts(
                 prev_page=f"?page={page - 1}" if page > 1 else None
             )
         else:
-            pagination_info = posts.PaginationInfo(
-                last_viewed_at=None,
+            return [], posts.PaginationInfo(
+                last_viewed_at=datetime.now(),
                 next_page=None,
                 prev_page=None
             )
@@ -121,10 +131,21 @@ async def create_post(
     current_user: models.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if len(title) > 300:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Title must not exceed 300 characters'
+        )
+    if len(content) > 10000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Content must not exceed 10,000 characters'
+        )
+
     file_path = None
     if file:
         file_path = f'static/posts/{file.filename}'
-        await FILE_MANAGER.save_file(file, file_path)
+        await file_manager.save_file(file, file_path)
 
     db_post = models.Post(
         title=title,
@@ -169,13 +190,13 @@ async def update_post(
 
         # Delete the previous file if it exists and is different from the new file
         if post.file_path and post.file_path != file_path:
-            await FILE_MANAGER.delete_file(post.file_path)
+            await file_manager.delete_file(post.file_path)
 
-        await FILE_MANAGER.save_file(file, file_path)
+        await file_manager.save_file(file, file_path)
         post.file_path = file_path
     elif post.file_path:
         # If no new file is provided, but there was a previous file, delete the previous file
-        await FILE_MANAGER.delete_file(post.file_path)
+        await file_manager.delete_file(post.file_path)
         post.file_path = None
 
     db.add(post)
@@ -185,14 +206,17 @@ async def update_post(
     return post
 
 
-@router.delete('/{post_id}', response_model=posts.Post)
+@router.delete('/{post_id}', response_model=posts.PostResponse, status_code=status.HTTP_200_OK)
 async def delete_post(
         post_id: int,
         user: models.User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
-    post = await db.execute(select(models.Post).filter(models.Post.id == post_id))
-    post = post.scalars().first()
+    try:
+        post = await db.execute(select(models.Post).filter(models.Post.id == post_id))
+        post = post.scalars().first()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Post not found: {str(e)}")
 
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Post does not exist')
@@ -200,9 +224,30 @@ async def delete_post(
     if post.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not allowed to delete this post')
 
+    try:
+        topic = await db.execute(select(models.Topics).filter(models.Topics.id == post.topic_id))
+        topic = topic.scalars().first()
+        if topic:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail='Cannot delete a post that is associated with a topic')
+    except NoResultFound:
+        pass
+    except Exception as e:
+        if "module 'models' has no attribute 'Topic'" in str(e):
+            pass
+        else:
+            raise e
+
     if post.file_path:
-        await FILE_MANAGER.delete_file(post.file_path)
-    await db.delete(post)
-    await db.commit()
+        try:
+            await file_manager.delete_file(post.file_path)
+        except Exception as e:
+            raise e
+
+    try:
+        await db.delete(post)
+        await db.commit()
+    except Exception as e:
+        raise e
 
     return post

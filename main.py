@@ -1,4 +1,4 @@
-from routers import posts, auth, users, admin
+from routers import posts, auth, users, admin, topic
 from fastapi import FastAPI
 from fastapi.security import OAuth2PasswordBearer
 
@@ -12,6 +12,7 @@ app.include_router(posts.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(admin.router)
+app.include_router(topic.router)
 
 
 @app.get('/')
