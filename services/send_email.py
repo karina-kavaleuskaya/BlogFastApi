@@ -1,9 +1,5 @@
-import os
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-from dotenv import load_dotenv
+from fastapi_mail import FastMail, MessageSchema
 from config import conf
-
-load_dotenv()
 
 
 async def send_password_reset_email(email: str, reset_token: str):

@@ -9,10 +9,8 @@ from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
 import logger
 import models
-from dotenv import load_dotenv
 from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, REFRESH_TOKEN_EXPIRE_DAYS, ACCESS_TOKEN_EXPIRE_MINUTES
 
-load_dotenv()
 
 
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
@@ -107,6 +105,7 @@ async def get_current_user(
     except JWTError as e:
         raise credential_exception
 
+
 async def refresh_access_token(request: Request, db: AsyncSession):
     refresh_token = get_refresh_token(request)
     if not refresh_token:
@@ -142,6 +141,7 @@ def save_refresh_token(response: Response, refresh_token: str):
         secure=True,
         samesite="strict",
     )
+
 
 def get_refresh_token(request: Request):
     return request.cookies.get("refresh_token")

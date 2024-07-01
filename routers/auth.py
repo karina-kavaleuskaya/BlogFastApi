@@ -15,7 +15,6 @@ from services.auth import (get_user, create_access_token, create_refresh_token, 
                            create_password_reset_token, )
 from config import ALGORITHM, REFRESH_SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 
-load_dotenv()
 
 
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
