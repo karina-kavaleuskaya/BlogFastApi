@@ -1,4 +1,4 @@
-import os
+from typing import Optional
 from fastapi import Depends, HTTPException, status, Request, Response
 from db.async_db import get_db
 from sqlalchemy.future import select
@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
-import logger
+from fastapi.responses import JSONResponse
+from loguru import logger
 import models
-from config import ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, REFRESH_TOKEN_EXPIRE_DAYS, ACCESS_TOKEN_EXPIRE_MINUTES
-
-
+from config import (ALGORITHM, SECRET_KEY, REFRESH_SECRET_KEY, REFRESH_TOKEN_EXPIRE_DAYS,
+                    ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_COOKIE_NAME)
 
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
 OAuth2_SCHEME = OAuth2PasswordBearer(tokenUrl='auth/login')
@@ -59,7 +59,6 @@ async def get_current_user(
     token: str = Depends(OAuth2_SCHEME),
     db: AsyncSession = Depends(get_db)
 ):
-
     credential_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Could not validate credentials',
@@ -68,19 +67,22 @@ async def get_current_user(
 
     try:
         access_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": True})
-        email: str = access_payload.get('sub')
+        email: str = access_payload.get("sub")
         if not email:
+            logger.error("No email found in access token payload")
             raise credential_exception
 
         user = await db.execute(select(models.User).where(models.User.email == email))
         user = user.scalars().first()
         if not user:
+            logger.error("User not found for the email in the access token")
             raise credential_exception
 
         return user
 
     except jwt.ExpiredSignatureError:
-        refresh_token = get_refresh_token(request)
+        logger.info("Access token has expired, trying to refresh it")
+        refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
         if refresh_token:
             try:
                 refresh_payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
@@ -91,48 +93,34 @@ async def get_current_user(
                     if user:
                         access_token_data = {'sub': user.email}
                         new_access_token = create_access_token(data=access_token_data,
-                                                               expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-                        return user
+                                                               expires_delta=timedelta(
+                                                                   minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+                        response = JSONResponse({'message': 'Access token refreshed'})
+                        response.set_cookie("access_token", new_access_token, httponly=True)
+                        return response
                     else:
-
+                        logger.error("User not found for the email in the refresh token")
                         raise credential_exception
                 else:
+                    logger.error("No email found in refresh token payload")
                     raise credential_exception
             except JWTError as e:
+                logger.error(f"Error decoding refresh token: {e}")
                 raise credential_exception
         else:
-            raise credential_exception
+            logger.error("Refresh token not found in the request")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token not found",
+                headers={'WWW-Authenticate': 'Bearer'}
+            )
     except JWTError as e:
+        logger.error(f"Error decoding access token: {e}")
         raise credential_exception
 
 
-async def refresh_access_token(request: Request, db: AsyncSession):
-    refresh_token = get_refresh_token(request)
-    if not refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found")
-
-    try:
-        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-
-        user = await db.get(models.User, user_id)
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-        access_token = create_access_token(user)
-        new_refresh_token = create_refresh_token(user)
-        save_refresh_token(request.app.state.Response, new_refresh_token)
-        return access_token
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token has expired")
-    except Exception as e:
-        logger.error(f"Error refreshing access token: {e}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Error refreshing access token")
-
-
 def save_refresh_token(response: Response, refresh_token: str):
+    logger.debug("Saving refresh token to cookie")
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
@@ -143,5 +131,42 @@ def save_refresh_token(response: Response, refresh_token: str):
     )
 
 
-def get_refresh_token(request: Request):
-    return request.cookies.get("refresh_token")
+async def get_refresh_token(request: Request, db: AsyncSession):
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    if not refresh_token:
+        logger.error("Refresh token not provided in the request")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not provided"
+        )
+
+    try:
+        logger.info("Decoding refresh token")
+        payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+    except (JWTError, KeyError) as e:
+        logger.error(f"Error decoding refresh token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token"
+        )
+
+    logger.info(f"Getting user with ID: {user_id}")
+    user = await db.get(models.User, user_id)
+    if not user:
+        logger.error(f"User with ID {user_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    logger.info("Creating new access token")
+    new_access_token = create_access_token(data={'sub': user.email},
+                                           expires_delta=timedelta(
+                                               minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    response = JSONResponse({'message': 'Access token refreshed'})
+    logger.info("Setting refresh token cookie")
+    response.set_cookie(REFRESH_TOKEN_COOKIE_NAME, refresh_token, max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+                        HttpOnly=True)
+    response.headers['Authorization'] = f'Bearer {new_access_token}'
+    return response

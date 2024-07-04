@@ -39,7 +39,6 @@ class Sex(Base):
     user = relationship('User', back_populates='sex')
 
 
-
 class Post(Base):
     __tablename__ = 'posts'
 
