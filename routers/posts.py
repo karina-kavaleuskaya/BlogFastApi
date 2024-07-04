@@ -1,6 +1,6 @@
 import models
 from datetime import datetime
-from schemas import posts
+from schemas import posts, users
 from typing import List, Tuple, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
@@ -28,9 +28,16 @@ async def all_posts(
     content: str | None = None,
     last_viewed_at: str | None = None,
     page: int = 1,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+        current_user: users.User = Depends(get_current_user)
 ):
     POSTS_PER_PAGE = 10
+
+    async with db:
+        current_user_db = await db.get(models.User, current_user.id)
+
+        if current_user_db.banned_is:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     async with db:
         topic_id_list = []
@@ -44,6 +51,11 @@ async def all_posts(
                 )
 
         query = select(models.Post)
+
+        query = query.where(models.Post.user_id.not_in(
+            select(models.User.id)
+            .where(models.User.banned_is == True)
+        ))
 
         if topic_id_list:
             query = query.where(models.Post.topic_id.in_(topic_id_list))
@@ -131,6 +143,10 @@ async def create_post(
     current_user: models.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+
+    if current_user.banned_is:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     if len(title) > 300:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -172,6 +188,9 @@ async def update_post(
         user: models.User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
+    if user.banned_is:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
     post = await db.execute(select(models.Post).filter(models.Post.id == post_id))
     post = post.scalars().first()
 
@@ -206,7 +225,7 @@ async def update_post(
     return post
 
 
-@router.delete('/{post_id}', response_model=posts.PostResponse, status_code=status.HTTP_200_OK)
+@router.delete('/delete/{post_id}', response_model=posts.PostResponse, status_code=status.HTTP_200_OK)
 async def delete_post(
         post_id: int,
         user: models.User = Depends(get_current_user),

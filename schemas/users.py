@@ -36,3 +36,4 @@ class User(UserBase):
 
 class UsersForAdmin(UserBase):
     banned_is: bool
+

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
 from sqlalchemy.future import select
 from services.auth import get_current_user
-from sqlalchemy import desc
+from sqlalchemy import desc, update
 
 
 router = APIRouter(
@@ -34,6 +34,8 @@ async def all_users(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can access this endpoint.")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
 
     page_size = 10
 
@@ -67,6 +69,8 @@ async def all_users(
         result = await db.execute(query)
         user_list = result.scalars().all()
 
+        user_list = [user for user in user_list if not user.banned_is]
+
         if user_list:
             first_post = user_list[0]
             last_post = user_list[-1]
@@ -83,3 +87,81 @@ async def all_users(
             )
 
         return user_list, pagination_info
+
+
+@router.get('/search/', response_model=Tuple[List[schemas.users.UsersForAdmin], schemas.posts.PaginationInfo])
+async def search_users(
+        name: str | None = None,
+        page: int = 1,
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.users.User = Depends(get_current_user)
+):
+    async with db:
+        query = select(models.User)
+
+        if name is not None:
+            query = query.filter(
+                models.User.first_name.ilike(f'%{name}%') |
+                models.User.second_name.ilike(f'%{name}%') |
+                models.User.email.ilike(f'%{name}%') |
+                models.User.nickname.ilike(f'%{name}%')
+            )
+
+        user_list = await db.execute(query)
+        user_list = user_list.scalars().all()
+        user_list = [user for user in user_list if not user.banned_is]
+
+        page_size = 10
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        users_to_return = user_list[start_index:end_index]
+
+        if users_to_return:
+            first_user = users_to_return[0]
+            last_user = users_to_return[-1]
+            pagination_info = schemas.posts.PaginationInfo(
+                last_viewed_at=last_user.created_at,
+                next_page=f"?page={page + 1}" if len(users_to_return) == page_size else None,
+                prev_page=f"?page={page - 1}" if page > 1 else None
+            )
+        else:
+            pagination_info = schemas.posts.PaginationInfo(
+                last_viewed_at=datetime.now(),
+                next_page=None,
+                prev_page=None
+            )
+
+        return users_to_return, pagination_info
+
+
+@router.patch('/ban/{user_id}', status_code=status.HTTP_200_OK)
+async def ban_user(
+    user_id: int,
+    ban: bool,
+    db: AsyncSession = Depends(get_db),
+    current_user: schemas.users.User = Depends(get_current_user),
+):
+    try:
+        user_role = await db.get(models.Roles, current_user.role_id)
+
+        if user_role.name not in ['admin', 'superadmin']:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can access this endpoint.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    user = await db.get(models.User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if ban and user.banned_is:
+        raise HTTPException(status_code=400, detail="User is already banned")
+    elif not ban and not user.banned_is:
+        raise HTTPException(status_code=400, detail="User is not banned")
+
+    user.banned_is = ban
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    action = "banned" if ban else "unbanned"
+    return {'message': f'User with ID {user_id} has been {action}.'}
