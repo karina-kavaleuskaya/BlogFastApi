@@ -1,4 +1,4 @@
-from routers import posts, auth, users, admin, topic, subscription
+from routers import posts, auth, users, admin, topic, subscription, token
 from fastapi import FastAPI
 from fastapi.security import OAuth2PasswordBearer
 
@@ -14,6 +14,7 @@ app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(topic.router)
 app.include_router(subscription.router)
+app.include_router(token.router)
 
 
 @app.get('/')
