@@ -52,7 +52,7 @@ class Post(Base):
 
     user = relationship('User', back_populates='post')
     topics = relationship('Topics', back_populates='post')
-    notification = relationship('Notification', back_populates='post')
+
 
 
 class User(Base):
