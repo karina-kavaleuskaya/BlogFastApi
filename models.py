@@ -19,7 +19,7 @@ class Topics(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     title = Column(String, nullable=False)
 
-    posts = relationship('Post', back_populates='topics')
+    post = relationship('Post', back_populates='topics')
 
 class Country(Base):
     __tablename__ = 'country'
@@ -40,7 +40,7 @@ class Sex(Base):
 
 
 class Post(Base):
-    __tablename__ = 'posts'
+    __tablename__ = 'post'
 
     id = Column(Integer, primary_key=True, nullable=False)
     title = Column(String, nullable=False)
@@ -50,8 +50,9 @@ class Post(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     user_id = Column(Integer, ForeignKey('user.id'))
 
-    user = relationship('User', back_populates='posts')
-    topics = relationship('Topics', back_populates='posts')
+    user = relationship('User', back_populates='post')
+    topics = relationship('Topics', back_populates='post')
+    notification = relationship('Notification', back_populates='post')
 
 
 class User(Base):
@@ -69,7 +70,7 @@ class User(Base):
     sex_id = Column(Integer, ForeignKey('sex.id'))
     country_id = Column(Integer, ForeignKey('country.id'))
 
-    posts = relationship('Post', back_populates='user')
+    post = relationship('Post', back_populates='user')
     roles = relationship('Roles', back_populates='user')
     subscriptions = relationship('Subscription',
                                  foreign_keys='Subscription.subscriber_id',
@@ -81,6 +82,7 @@ class User(Base):
     tokens = relationship('Tokens', back_populates='user')
     sex = relationship('Sex', back_populates='user')
     country = relationship('Country', back_populates='user')
+    notification = relationship('Notification', back_populates='user')
 
 
 class Subscription(Base):
@@ -99,3 +101,5 @@ class Tokens(Base):
     user_id = Column(Integer, ForeignKey('user.id'))
 
     user = relationship('User', back_populates='tokens')
+
+

@@ -1,17 +1,12 @@
-from typing import Optional
-from fastapi import Depends, HTTPException, status, Request, Cookie
+from fastapi import Depends, HTTPException, status, Request
 from db.async_db import get_db
 from sqlalchemy.future import select
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials
 from datetime import datetime, timedelta
-from fastapi.responses import JSONResponse
 from loguru import logger
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import models
-from config import (ALGORITHM, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS, OAuth2_SCHEME,
+from config import (ALGORITHM, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
                     PWD_CONTEXT)
 
 
@@ -115,3 +110,5 @@ async def set_user_authorized_state(request: Request, user: models.User):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to set user authorized state"
         )
+
+

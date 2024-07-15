@@ -1,15 +1,13 @@
 import models
 from schemas import posts
-from typing import List, Tuple, Optional
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy.future import select
-from sqlalchemy import func
-from fastapi import HTTPException, status, Depends, APIRouter, Form, UploadFile, File
+from fastapi import HTTPException, status, Depends, APIRouter
 from services.auth import get_current_user
 import schemas
-
+from services.subscription import search_subscriptions
 
 router = APIRouter(
     prefix='/subscriptions',
@@ -71,8 +69,6 @@ async def get_user_subscriptions(
         if current_user.banned_is == True:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-        subscriber = current_user
-
         subscriptions = await db.execute(
             select(models.Subscription)
             .where(models.Subscription.subscriber_id == current_user.id)
@@ -96,12 +92,7 @@ async def get_user_subscriptions(
         if current_user.banned_is:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-        subscriptions = await db.execute(
-            select(models.Subscription)
-            .where(models.Subscription.subscribed_id == current_user.id)
-            .where(~models.Subscription.subscriber.has(banned_is=True))
-        )
-        subscriptions = subscriptions.scalars().all()
+        subscriptions = await search_subscriptions(db, current_user.id)
 
         return subscriptions
 

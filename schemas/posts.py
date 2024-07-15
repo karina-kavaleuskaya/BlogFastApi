@@ -49,6 +49,9 @@ class PostResponse(BaseModel):
             )
         return v
 
+    class Config:
+        from_attributes = True
+
 
 class PaginationInfo(BaseModel):
     last_viewed_at: datetime

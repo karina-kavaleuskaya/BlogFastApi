@@ -7,10 +7,22 @@ from db.async_db import get_db
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.future import select
 from sqlalchemy import func
-from fastapi import HTTPException, status, Depends, APIRouter, Form, UploadFile, File
+from fastapi import HTTPException, status, Depends, APIRouter, Form, UploadFile, File, BackgroundTasks
 from services.auth import get_current_user
-from config import file_manager
+from config import file_manager, notification_service
 from sqlalchemy.orm.exc import NoResultFound
+import logging
+from services.subscription import search_subscriptions
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 
@@ -140,8 +152,8 @@ async def create_post(
     topic_id: Optional[int] = Form(None),
     content: str = Form(...),
     file: UploadFile = File(None),
-    current_user: models.User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: users.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
 
     if current_user.banned_is:
@@ -171,6 +183,11 @@ async def create_post(
         user_id=current_user.id,
         created_at=datetime.now()
     )
+
+    subscriptions = await search_subscriptions(db, current_user.id)
+    subscription_user_ids = [sub.subscriber_id for sub in subscriptions]
+    await notification_service.send_new_post_notification(subscription_user_ids, current_user.id)
+
     db.add(db_post)
     await db.commit()
     await db.refresh(db_post)
@@ -270,3 +287,7 @@ async def delete_post(
         raise e
 
     return post
+
+
+
+

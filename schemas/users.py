@@ -18,15 +18,15 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password:str
 
-    @validator('email')
-    def email_must_be_valid(cls, v):
-        import re
-        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', v):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid email address"
-            )
-        return v
+    #@validator('email')
+    #def email_must_be_valid(cls, v):
+        #import re
+        #if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', v):
+            #raise HTTPException(
+                #status_code=status.HTTP_403_FORBIDDEN,
+                #detail="Invalid email address"
+            #)
+        #return v
 
 
 
