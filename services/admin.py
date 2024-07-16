@@ -1,5 +1,5 @@
-from fastapi import HTTPException, status, Depends
-from sqlalchemy.orm.exc import NoResultFound
-from models import Roles
-from services.auth import get_current_user
+from repository.admin import change_role_db
 
+async def change_user_role(user_id, role_id, db, current_user):
+    user = await change_role_db(user_id, role_id, db, current_user)
+    return user

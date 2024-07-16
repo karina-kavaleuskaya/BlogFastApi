@@ -13,7 +13,6 @@ import enum
 from dataclasses import dataclass
 
 
-
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationType(str, enum.Enum):
-    NEW_POST = "NEW_POST"
+    NEW_POST = "NEW_POST",
+    NEW_SUB = "NEW SUB"
 
 
 @dataclass
@@ -43,7 +43,6 @@ class ConnectionManager:
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[user_id] = websocket
-
 
     def disconnect(self, user_id: int):
         if user_id in self.active_connections:
@@ -88,6 +87,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 25
 REFRESH_TOKEN_EXPIRE_DAYS = 15
 PWD_CONTEXT = CryptContext(schemes=['bcrypt'], deprecated='auto')
 OAuth2_SCHEME = OAuth2PasswordBearer(tokenUrl='auth/login')
+
+
 
 
 class Envs:

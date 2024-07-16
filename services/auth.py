@@ -10,6 +10,7 @@ from config import (ALGORITHM, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_
                     PWD_CONTEXT)
 
 
+
 async def get_user(db:AsyncSession, email):
     async with db:
         result = await db.execute(select(models.User).filter(models.User.email == email))

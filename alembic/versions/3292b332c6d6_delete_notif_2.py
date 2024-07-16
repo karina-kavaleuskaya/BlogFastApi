@@ -1,8 +1,8 @@
-"""Delete notif
+"""Delete notif 2
 
-Revision ID: c892e83752f7
+Revision ID: 3292b332c6d6
 Revises: 872844bfd9aa
-Create Date: 2024-07-15 19:23:33.561613
+Create Date: 2024-07-16 16:50:12.983232
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c892e83752f7'
+revision: str = '3292b332c6d6'
 down_revision: Union[str, None] = '872844bfd9aa'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

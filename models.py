@@ -54,7 +54,6 @@ class Post(Base):
     topics = relationship('Topics', back_populates='post')
 
 
-
 class User(Base):
     __tablename__ = 'user'
 
@@ -82,7 +81,7 @@ class User(Base):
     tokens = relationship('Tokens', back_populates='user')
     sex = relationship('Sex', back_populates='user')
     country = relationship('Country', back_populates='user')
-    notification = relationship('Notification', back_populates='user')
+
 
 
 class Subscription(Base):
