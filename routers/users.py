@@ -1,13 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 import schemas
-import models
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
-from sqlalchemy.future import select
 from services.auth import get_current_user
-from sqlalchemy import desc, update
 from services.user import user_ban, get_all_users, search
 
 router = APIRouter(
@@ -16,7 +13,7 @@ router = APIRouter(
 )
 
 
-@router.get('/all-users/', response_model=Tuple[List[schemas.users.UsersForAdmin], schemas.posts.PaginationInfo])
+@router.get('/', response_model=Tuple[List[schemas.users.UsersForAdmin], schemas.posts.PaginationInfo])
 async def all_users(
         sex_id: int | None = None,
         country_id: int | None = None,
@@ -88,4 +85,4 @@ async def ban_user(
     current_user: schemas.users.User = Depends(get_current_user),
 ):
     user = await user_ban(user_id, ban, db, current_user)
-    return f'User {user_id} ban {ban}'
+    return f'User {user.id} ban {ban}'

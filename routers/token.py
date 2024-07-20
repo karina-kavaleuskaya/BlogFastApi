@@ -6,12 +6,12 @@ from typing import Optional
 import logging
 import models
 from services.auth import (create_access_token, create_refresh_token,
-                           verify_refresh_token, set_user_authorized_state)
+                           verify_refresh_token, set_user_authorized_state, get_id_user)
 
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 router = APIRouter(
     prefix='/token',
@@ -37,7 +37,7 @@ async def refresh_token(
     if not user_id:
         return JSONResponse(status_code=401, content={"error": "Invalid refresh token"})
 
-    user = await db.get(models.User, user_id)
+    user = await get_id_user(db, user_id)
     if not user:
         return JSONResponse(status_code=404, content={"error": "User not found"})
 

@@ -5,20 +5,9 @@ from typing import List, Tuple, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
 from fastapi.encoders import jsonable_encoder
-from fastapi import status, Depends, APIRouter, Form, UploadFile, File, BackgroundTasks
+from fastapi import status, Depends, APIRouter, Form, UploadFile, File, HTTPException
 from services.auth import get_current_user
-import logging
 from services.post import delete_posts, update_post_serv, create_post_with_notification, get_all_posts
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -80,6 +69,19 @@ async def create_post(
     current_user: users.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if current_user.banned_is:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+
+    if len(title) > 300:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Title must not exceed 300 characters'
+        )
+    if len(content) > 10000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Content must not exceed 10,000 characters'
+        )
 
     db_post = await create_post_with_notification(title, topic_id, content, file, current_user, db)
     return db_post
@@ -95,6 +97,8 @@ async def update_post(
         user: models.User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
+    if user.banned_is:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     post = await update_post_serv(post_id, title, topic_id, content, file, user, db)
     return post
 
@@ -102,10 +106,10 @@ async def update_post(
 @router.delete('/delete/{post_id}', response_model=posts.PostResponse, status_code=status.HTTP_200_OK)
 async def delete_post(
         post_id: int,
-        user: models.User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        user: models.User = Depends(get_current_user)
 ):
-    post = await delete_posts(post_id, user, db)
+    post = await delete_posts(post_id, db, user)
     return post
 
 

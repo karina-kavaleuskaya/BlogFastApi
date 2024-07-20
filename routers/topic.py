@@ -1,5 +1,5 @@
 from fastapi import status, Depends, APIRouter
-import schemas
+from schemas import topic, users
 import models
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.async_db import get_db
@@ -13,14 +13,14 @@ router = APIRouter(
 )
 
 
-@router.post('/', response_model=schemas.posts.TopicBase, status_code=status.HTTP_201_CREATED)
-async def create_topic(topic: schemas.posts.TopicBase, db: AsyncSession = Depends(get_db),
-                      current_user: schemas.users.User = Depends(get_current_user)):
+@router.post('/', response_model=topic.TopicCreate, status_code=status.HTTP_201_CREATED)
+async def create_topic(topic: topic.TopicCreate, db: AsyncSession = Depends(get_db),
+                      current_user: users.User = Depends(get_current_user)):
     new_topic = await create_new_topic(topic, db, current_user)
     return new_topic
 
 
-@router.put('/update/{topic_id}', response_model=schemas.posts.Topic, status_code=status.HTTP_201_CREATED)
+@router.put('/update/{topic_id}', response_model=topic.Topic, status_code=status.HTTP_201_CREATED)
 async def update_topic(topic_id: int, title: str, db: AsyncSession = Depends(get_db),
                       user: models.User = Depends(get_current_user)):
 
@@ -30,12 +30,13 @@ async def update_topic(topic_id: int, title: str, db: AsyncSession = Depends(get
 
 @router.delete('/delete/{topic_id}')
 async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db),
-                       current_user: schemas.users.User = Depends(get_current_user)):
+                       current_user: users.User = Depends(get_current_user)):
 
     topic = await delete_topic_serv(topic_id, db, current_user)
+    return f'You deleted the topic {topic.id}'
 
 
-@router.get("/", response_model=list[schemas.posts.Topic])
+@router.get("/", response_model=list[topic.Topic])
 async def all_topics(
         current_user: models.User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)

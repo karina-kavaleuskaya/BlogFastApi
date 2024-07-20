@@ -1,7 +1,16 @@
 from routers import posts, auth, users, admin, topic, subscription, token, notification
 from fastapi import FastAPI
 from fastapi.security import OAuth2PasswordBearer
-from config import ConnectionManager
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 OAuth2_SCHEME = OAuth2PasswordBearer('auth/login/')

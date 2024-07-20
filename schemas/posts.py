@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from fastapi import HTTPException, status
 from typing import Optional
 from datetime import datetime
@@ -31,7 +31,8 @@ class PostResponse(BaseModel):
     file_path: str | None
     created_at: datetime
 
-    @validator('title')
+    @field_validator('title')
+    @classmethod
     def title_must_not_exceed_10000_chars(cls, v):
         if len(v) > 300:
             raise HTTPException(
@@ -40,7 +41,9 @@ class PostResponse(BaseModel):
             )
         return v
 
-    @validator('content')
+
+    @field_validator('content')
+    @classmethod
     def content_must_not_exceed_10000_chars(cls, v):
         if len(v) > 10000:
             raise HTTPException(
@@ -59,25 +62,3 @@ class PaginationInfo(BaseModel):
     prev_page: Optional[str]
 
 
-class TopicBase(BaseModel):
-    title: str
-
-
-class TopicCreate(TopicBase):
-    pass
-
-
-class Topic(TopicBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-
-class Subscription(BaseModel):
-    subscriber_id: int
-    subscribed_id: int
-
-
-class SubscriptionCreate(BaseModel):
-    subscribed_id: int

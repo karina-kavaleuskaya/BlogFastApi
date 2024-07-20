@@ -1,20 +1,29 @@
 from fastapi import Depends, HTTPException, status, Request
 from db.async_db import get_db
-from sqlalchemy.future import select
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
-from loguru import logger
+import logging
 import models
 from config import (ALGORITHM, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
                     PWD_CONTEXT)
+from repository.user import get_user_by_email, get_user_by_id
+from repository.auth import register, reset_token_serv, get_token, get_user_by_token, change_password
+from services.send_email import send_password_reset_email
 
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-async def get_user(db:AsyncSession, email):
-    async with db:
-        result = await db.execute(select(models.User).filter(models.User.email == email))
-        return result.scalars().first()
+
+async def get_user(db: AsyncSession, email):
+    user = await get_user_by_email(db, email)
+    print(user)
+    return user
+
+async def get_id_user(db, user_id):
+    user = await get_user_by_id(db, user_id)
+    return user
 
 
 def verify_password(plain_password, hashed_password):
@@ -44,7 +53,7 @@ def create_refresh_token(user_id: int, expires_delta: timedelta = None):
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str):
-    user = await get_user(db, email)
+    user = await get_user_by_email(db, email)
     if not user or not verify_password(password, user.password_hash):
         return False
     return user
@@ -81,7 +90,7 @@ async def get_current_user(
             detail="Invalid access token"
         )
 
-    user = await db.get(models.User, user_id)
+    user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -113,3 +122,62 @@ async def set_user_authorized_state(request: Request, user: models.User):
         )
 
 
+async def register_user(user, db):
+    db_user = await get_user(db, email=user.email)
+
+    if db_user:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='User already exists!')
+
+    hashed_password = PWD_CONTEXT.hash(user.password)
+    db_user = await register(user, db, hashed_password)
+    return db_user
+
+
+async def reset_user_password(request, db):
+    user = await get_user_by_email(db, request.email)
+    if user:
+        reset_token = create_password_reset_token(data={"sub": user.email})
+        await send_password_reset_email(user.email, reset_token)
+        expires_delta = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.utcnow() + expires_delta
+        reset_token_obj = await reset_token_serv(db, reset_token, expire, user)
+
+        return reset_token_obj
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User with this email does not exist."
+        )
+
+
+async def reset_password_confirm(request, db):
+    token = await get_token(request, db)
+
+    if token:
+        if token.reset_token_expire > datetime.utcnow():
+            user = await get_user_by_token(token, db)
+
+            if user:
+                user.password_hash = PWD_CONTEXT.hash(request.new_password)
+                user = change_password(user, token, db)
+
+                return user
+
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset token has expired.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reset token not found.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

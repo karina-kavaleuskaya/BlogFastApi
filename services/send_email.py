@@ -1,9 +1,8 @@
 from fastapi_mail import FastMail, MessageSchema
-from config import conf
+from config import conf, reset_link
 
 
 async def send_password_reset_email(email: str, reset_token: str):
-    reset_link = f"https://127.0.0.1/auth/reset-password/confirm?token={reset_token}"
 
     message = MessageSchema(
         subject="Password Reset Request",
@@ -14,7 +13,7 @@ async def send_password_reset_email(email: str, reset_token: str):
         We have received a request to reset your password.
         To reset your password, please click the following link:
 
-        {reset_link}
+        {reset_link+f'{reset_token}'}
 
         If you did not request a password reset, please ignore this email.
 
