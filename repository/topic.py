@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy import update
 
 
-async def create_topic_db(topic, db):
+async def create_topic_db(db, topic):
     new_topic = models.Topics(
         title=topic.title
     )
@@ -14,7 +14,7 @@ async def create_topic_db(topic, db):
     return new_topic
 
 
-async def update_topic_db(topic, title, db):
+async def update_topic_db(db, topic, title):
     topic.title = title
     db.add(topic)
     await db.commit()
@@ -22,7 +22,7 @@ async def update_topic_db(topic, title, db):
     return topic
 
 
-async def delete_topic_db(topic, topic_id, db):
+async def delete_topic_db(db, topic, topic_id):
     try:
         await db.execute(update(models.Post).where(models.Post.topic_id == topic_id).values(topic_id=None))
         await db.delete(topic)
@@ -40,7 +40,7 @@ async def get_topics_db(db):
     return topics
 
 
-async def get_topic(topic_id, db):
+async def get_topic_db(db, topic_id):
     result = await db.execute(select(models.Topics).where(models.Topics.id == topic_id))
     topic = result.scalars().first()
     return topic

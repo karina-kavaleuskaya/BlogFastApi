@@ -26,7 +26,7 @@ async def all_users(
 ):
     page_size = 10
 
-    user_list = await get_all_users(sex_id, country_id, name, order_by, sort_direction, page, db, current_user)
+    user_list = await get_all_users(db, sex_id, country_id, name, order_by, sort_direction, page, current_user)
 
     if user_list:
         first_post = user_list[0]
@@ -53,7 +53,7 @@ async def search_users(
         db: AsyncSession = Depends(get_db),
         current_user: schemas.users.User = Depends(get_current_user)
 ):
-    user_list = await search(name, db)
+    user_list = await search(db, name)
     page_size = 10
     start_index = (page - 1) * page_size
     end_index = start_index + page_size
@@ -84,5 +84,5 @@ async def ban_user(
     db: AsyncSession = Depends(get_db),
     current_user: schemas.users.User = Depends(get_current_user),
 ):
-    user = await user_ban(user_id, ban, db, current_user)
+    user = await user_ban(db, user_id, ban, current_user)
     return f'User {user.id} ban {ban}'

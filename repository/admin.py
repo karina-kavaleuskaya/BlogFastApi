@@ -1,4 +1,4 @@
-async def change_role_db(user, role_id, db):
+async def change_role_db(db, user, role_id):
     user.role_id = role_id
     db.add(user)
     await db.commit()

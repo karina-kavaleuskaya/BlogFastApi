@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.future import select
 
 
-async def register(user, db, hashed_password):
+async def register_db(db, user, hashed_password):
     db_user = models.User(
         email=user.email,
         first_name=user.first_name,
@@ -20,7 +20,7 @@ async def register(user, db, hashed_password):
     return db_user
 
 
-async def reset_token_serv(db, reset_token, expire, user):
+async def reset_token_db(db, reset_token, expire, user):
     reset_token_obj = models.Tokens(
         reset_token=reset_token,
         reset_token_expire=expire,
@@ -31,7 +31,7 @@ async def reset_token_serv(db, reset_token, expire, user):
     return reset_token_obj
 
 
-async def get_token(request, db):
+async def get_token_db(db, request):
     token = await db.execute(
         select(models.Tokens).where(models.Tokens.reset_token == request.token)
     )
@@ -39,12 +39,12 @@ async def get_token(request, db):
     return token
 
 
-async def get_user_by_token(token, db):
+async def get_user_by_token_db(db, token):
     user = await db.get(models.User, token.user_id)
     return user
 
 
-async def change_password(user, token, db):
+async def change_password_db(db, user, token):
     db.add(user)
     await db.commit()
 

@@ -16,7 +16,7 @@ router = APIRouter(
 @router.post('/', response_model=topic.TopicCreate, status_code=status.HTTP_201_CREATED)
 async def create_topic(topic: topic.TopicCreate, db: AsyncSession = Depends(get_db),
                       current_user: users.User = Depends(get_current_user)):
-    new_topic = await create_new_topic(topic, db, current_user)
+    new_topic = await create_new_topic(db, topic, current_user)
     return new_topic
 
 
@@ -24,7 +24,7 @@ async def create_topic(topic: topic.TopicCreate, db: AsyncSession = Depends(get_
 async def update_topic(topic_id: int, title: str, db: AsyncSession = Depends(get_db),
                       user: models.User = Depends(get_current_user)):
 
-    topic = await update_topic_serv(topic_id, title, db, user)
+    topic = await update_topic_serv(db, topic_id, title, user)
     return topic
 
 
@@ -32,7 +32,7 @@ async def update_topic(topic_id: int, title: str, db: AsyncSession = Depends(get
 async def delete_topic(topic_id: int, db: AsyncSession = Depends(get_db),
                        current_user: users.User = Depends(get_current_user)):
 
-    topic = await delete_topic_serv(topic_id, db, current_user)
+    topic = await delete_topic_serv(db, topic_id, current_user)
     return f'You deleted the topic {topic.id}'
 
 

@@ -35,3 +35,6 @@ class NotificationService:
             text=f"User with id {author_id} created new post!"
         ).to_json_str())
 
+
+manager = ConnectionManager()
+notification_service = NotificationService(manager)

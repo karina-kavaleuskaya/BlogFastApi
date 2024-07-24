@@ -3,7 +3,7 @@ from sqlalchemy.future import select
 from sqlalchemy import desc
 
 
-async def ban_user_db(user, ban, db):
+async def ban_user_db(db, user, ban):
     user.banned_is = ban
     db.add(user)
     await db.commit()
@@ -11,7 +11,7 @@ async def ban_user_db(user, ban, db):
     return user
 
 
-async def get_all_users_db(sex_id, country_id, name, order_by, sort_direction, page, db):
+async def get_all_users_db(db, sex_id, country_id, name, order_by, sort_direction, page):
     page_size = 10
 
     async with db:
@@ -48,7 +48,7 @@ async def get_all_users_db(sex_id, country_id, name, order_by, sort_direction, p
         return user_list
 
 
-async def search_users_db(name, db):
+async def search_users_db(db, name):
     async with db:
         query = select(models.User)
 
@@ -67,17 +67,17 @@ async def search_users_db(name, db):
         return user_list
 
 
-async def get_user_role(db, current_user):
+async def get_user_role_db(db, current_user):
     user_role = await db.get(models.Roles, current_user.role_id)
     return user_role
 
 
-async def get_user_by_id(db, user_id):
+async def get_user_by_id_db(db, user_id):
     admin = await db.get(models.User, user_id)
     return admin
 
 
-async def get_user_by_email(db, email):
+async def get_user_by_email_db(db, email):
     result = await db.execute(select(models.User).filter(models.User.email == email))
     user = result.scalars().first()
     return user

@@ -11,10 +11,6 @@ from connection import ConnectionManager
 load_dotenv()
 
 reset_link = f"https://127.0.0.1/auth/reset-password/confirm?token="
-manager = ConnectionManager()
-notification_service = NotificationService(manager)
-file_manager = FileSerivce()
-
 SQLALCHEMY_DATABASE_URL = os.getenv('SQLALCHEMY_DATABASE_URL')
 ALGORITHM = 'HS256'
 SECRET_KEY = os.getenv('SECRET_KEY')

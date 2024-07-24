@@ -29,7 +29,7 @@ async def all_posts(
 ):
 
     posts_per_page = 10
-    all_posts = await get_all_posts(topic_ids, start_date, end_date, content, last_viewed_at, page, db, current_user)
+    all_posts = await get_all_posts(db, topic_ids, start_date, end_date, content, last_viewed_at, page, current_user)
     posts_with_files = []
     for post in all_posts:
         post_response = posts.PostResponse(
@@ -83,7 +83,7 @@ async def create_post(
             detail='Content must not exceed 10,000 characters'
         )
 
-    db_post = await create_post_with_notification(title, topic_id, content, file, current_user, db)
+    db_post = await create_post_with_notification(db, title, topic_id, content, file, current_user)
     return db_post
 
 
@@ -99,7 +99,7 @@ async def update_post(
 ):
     if user.banned_is:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    post = await update_post_serv(post_id, title, topic_id, content, file, user, db)
+    post = await update_post_serv(db, post_id, title, topic_id, content, file, user)
     return post
 
 
@@ -109,7 +109,7 @@ async def delete_post(
         db: AsyncSession = Depends(get_db),
         user: models.User = Depends(get_current_user)
 ):
-    post = await delete_posts(post_id, db, user)
+    post = await delete_posts(db, post_id, user)
     return post
 
 

@@ -62,5 +62,5 @@ async def delete_subscription(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Forbidden: Banned users cannot subscribe")
 
-    subscriptions = await delete_sub(subscribed_id, current_user, db)
+    subscriptions = await delete_sub(db, subscribed_id, current_user)
     return subscriptions

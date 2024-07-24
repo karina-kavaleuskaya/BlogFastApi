@@ -2,7 +2,7 @@ from sqlalchemy.future import select
 import models
 
 
-async def search_subscriptions(db, current_user):
+async def search_subscriptions_db(db, current_user):
     subscriptions = await db.execute(
         select(models.Subscription)
         .where(models.Subscription.subscribed_id == current_user.id)
@@ -24,22 +24,22 @@ async def get_user_subscriptions_on_db(db, current_user):
         return subscriptions
 
 
-async def get_subscribed(db, subscription):
+async def get_subscribed_db(db, subscription):
     subscribed = await db.get(models.User, subscription.subscribed_id)
     return subscribed
 
 
-async def get_subscription(subscribed_id, current_user, db):
+async def get_subscription_db(db, subscribed_id, current_user):
     subscription = await db.get(models.Subscription, {"subscriber_id": current_user.id, "subscribed_id": subscribed_id})
     return subscription
 
 
-async def check_existing_subscription(db, subscriber, subscription):
+async def check_existing_subscription_db(db, subscriber, subscription):
     existing_subscription = await db.get(models.Subscription, (subscriber.id, subscription.subscribed_id))
     return existing_subscription
 
 
-async def create_new_subscription(db, subscriber, subscription):
+async def create_new_subscription_db(db, subscriber, subscription):
     new_subscription = models.Subscription(
         subscriber_id=subscriber.id,
         subscribed_id=subscription.subscribed_id
@@ -52,7 +52,7 @@ async def create_new_subscription(db, subscriber, subscription):
     return new_subscription
 
 
-async def delete_subscription(db, subscription):
+async def delete_subscription_db(db, subscription):
     try:
         await db.delete(subscription)
         await db.commit()

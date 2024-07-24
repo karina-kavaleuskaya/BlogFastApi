@@ -7,8 +7,8 @@ import logging
 import models
 from config import (ALGORITHM, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
                     PWD_CONTEXT)
-from repository.user import get_user_by_email, get_user_by_id
-from repository.auth import register, reset_token_serv, get_token, get_user_by_token, change_password
+from repository.user import get_user_by_email_db, get_user_by_id_db
+from repository.auth import register_db, reset_token_db, get_token_db, get_user_by_token_db, change_password_db
 from services.send_email import send_password_reset_email
 
 
@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 async def get_user(db: AsyncSession, email):
-    user = await get_user_by_email(db, email)
-    print(user)
+    user = await get_user_by_email_db(db, email)
     return user
 
+
 async def get_id_user(db, user_id):
-    user = await get_user_by_id(db, user_id)
+    user = await get_user_by_id_db(db, user_id)
     return user
 
 
@@ -53,7 +53,7 @@ def create_refresh_token(user_id: int, expires_delta: timedelta = None):
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str):
-    user = await get_user_by_email(db, email)
+    user = await get_user_by_email_db(db, email)
     if not user or not verify_password(password, user.password_hash):
         return False
     return user
@@ -90,7 +90,7 @@ async def get_current_user(
             detail="Invalid access token"
         )
 
-    user = await get_user_by_id(db, user_id)
+    user = await get_user_by_id_db(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -122,25 +122,25 @@ async def set_user_authorized_state(request: Request, user: models.User):
         )
 
 
-async def register_user(user, db):
-    db_user = await get_user(db, email=user.email)
+async def register_user(db, user):
+    db_user = await get_user_by_email_db(db, email=user.email)
 
     if db_user:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='User already exists!')
 
     hashed_password = PWD_CONTEXT.hash(user.password)
-    db_user = await register(user, db, hashed_password)
+    db_user = await register_db(db, user, hashed_password)
     return db_user
 
 
-async def reset_user_password(request, db):
-    user = await get_user_by_email(db, request.email)
+async def reset_user_password(db, request):
+    user = await get_user_by_email_db(db, request.email)
     if user:
         reset_token = create_password_reset_token(data={"sub": user.email})
         await send_password_reset_email(user.email, reset_token)
         expires_delta = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         expire = datetime.utcnow() + expires_delta
-        reset_token_obj = await reset_token_serv(db, reset_token, expire, user)
+        reset_token_obj = await reset_token_db(db, reset_token, expire, user)
 
         return reset_token_obj
     else:
@@ -150,16 +150,16 @@ async def reset_user_password(request, db):
         )
 
 
-async def reset_password_confirm(request, db):
-    token = await get_token(request, db)
+async def reset_password_confirm(db, request):
+    token = await get_token_db(db, request)
 
     if token:
         if token.reset_token_expire > datetime.utcnow():
-            user = await get_user_by_token(token, db)
+            user = await get_user_by_token_db(db, token)
 
             if user:
                 user.password_hash = PWD_CONTEXT.hash(request.new_password)
-                user = change_password(user, token, db)
+                user = change_password_db(db, user, token)
 
                 return user
 

@@ -21,7 +21,7 @@ router = APIRouter(
 
 @router.post('/register/', response_model=users.User)
 async def register(user: users.UserCreate, db: AsyncSession = Depends(get_db)):
-    db_user = await register_user(user, db)
+    db_user = await register_user(db, user)
     return db_user
 
 
@@ -51,7 +51,7 @@ async def reset_password(
     request: PasswordResetRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    token = await reset_user_password(request, db)
+    token = await reset_user_password(db, request)
     return PasswordResetResponse(message=f"{token} reset instructions sent to your email.")
 
 
@@ -60,5 +60,5 @@ async def confirm_password_reset(
     request: PasswordResetToken,
     db: AsyncSession = Depends(get_db)
 ):
-    user = reset_password_confirm(request, db)
+    user = reset_password_confirm(db, request)
     return PasswordResetResponse(message="Password reset successfully.")

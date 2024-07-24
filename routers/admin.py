@@ -19,7 +19,7 @@ async def change_role(
     db: AsyncSession = Depends(get_db),
     current_user: schemas.users.User = Depends(get_current_user),
 ):
-    user = await change_user_role(user_id, role_id, db, current_user)
+    user = await change_user_role(db, user_id, role_id, current_user)
     return f"User {user.id} was changed role"
 
 

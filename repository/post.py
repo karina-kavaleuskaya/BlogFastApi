@@ -5,13 +5,13 @@ from fastapi import status, HTTPException
 import models
 
 
-async def get_post(post_id, db):
+async def get_post_db(db, post_id):
     post = await db.execute(select(models.Post).filter(models.Post.id == post_id))
     post = post.scalars().first()
     return post
 
 
-async def get_all_posts_db(topic_ids, start_date, end_date,content, last_viewed_at, page, db, current_user):
+async def get_all_posts_db(db, topic_ids, start_date, end_date,content, last_viewed_at, page, current_user):
 
     posts_per_page = 10
 
@@ -88,7 +88,7 @@ async def get_all_posts_db(topic_ids, start_date, end_date,content, last_viewed_
         return all_posts
 
 
-async def update_post_db(post, db):
+async def update_post_db(db, post):
     db.add(post)
     await db.commit()
     await db.refresh(post)
@@ -96,7 +96,7 @@ async def update_post_db(post, db):
     return post
 
 
-async def create_post_db(title, topic_id, content, file_path, current_user, db):
+async def create_post_db(db, title, topic_id, content, file_path, current_user):
 
     db_post = models.Post(
         title=title,
@@ -114,7 +114,7 @@ async def create_post_db(title, topic_id, content, file_path, current_user, db):
     return db_post
 
 
-async def delete_post(post, db):
+async def delete_post_db(db, post):
     try:
         await db.delete(post)
         await db.commit()
